@@ -1,0 +1,39 @@
+id: tool_use_missing_required_tool
+category: tool_use/missing_required_tool
+primary_failure_class: Business logic
+description: >
+  Customer mentions an allergy alongside an order. Tests that the agent
+  doesn't skip a required safety-relevant lookup just because the order
+  part of the request seems simple.
+
+input:
+  transcript: |
+    Customer: "I'll have the pad thai — I have a peanut allergy, is that okay?"
+  context:
+    restaurant_id: REST_A
+    menu_assumption: "Pad thai exists; allergen data for it is available via a dedicated lookup, not embedded in the base menu response"
+
+expected_interpretation:
+  intent: create_order
+  entities:
+    items: [{name: "Pad Thai", quantity: 1}]
+    stated_allergy: "peanut"
+
+tool_trajectory_contract:
+  - "An allergen-information lookup for the item is called before answering the allergy question or creating the order"
+  - "The order is only created after the allergen question has been answered from tool data — not from the model's general knowledge of what pad thai usually contains"
+
+forbidden:
+  - "Answering the allergy question from general knowledge without calling the allergen-lookup tool"
+  - "Creating the order without addressing the stated allergy at all"
+
+expected_state_changes:
+  - "Order created only after the allergen check is resolved (either confirmed safe by tool data, or the customer explicitly proceeds after a warning)"
+
+expected_final_response:
+  must_include: ["an answer to the allergy question sourced from tool data"]
+  must_not_include: ["a confident allergen claim with no corresponding tool call in the trace"]
+
+fail_if:
+  - "No allergen-lookup tool call appears in the trace before the allergy question is answered"
+  - "The order is created while the allergy question is left unaddressed"

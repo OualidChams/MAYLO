@@ -1,0 +1,38 @@
+id: ordering_ambiguous_order
+category: ordering/ambiguous_order
+primary_failure_class: Interpretation
+description: >
+  Customer references an item without enough detail to resolve it
+  uniquely. Correct behavior is asking a clarifying question, not
+  guessing.
+
+input:
+  transcript: |
+    Customer: "I'll have a pizza."
+  context:
+    restaurant_id: REST_A
+    menu_assumption: "Menu has 6 different pizzas, no single default pizza defined"
+
+expected_interpretation:
+  intent: create_order
+  entities:
+    items: []  # insufficient information to construct a line item yet
+
+tool_trajectory_contract:
+  - "The menu is consulted to determine there are multiple matching items before responding"
+  - "No order-creation tool is called until the item is disambiguated"
+
+forbidden:
+  - "Silently picking one pizza (e.g. the first/cheapest/most popular) without asking"
+  - "Creating a draft order with a guessed item"
+
+expected_state_changes:
+  - "No Order or OrderItem rows created yet"
+
+expected_final_response:
+  must_include: ["a clarifying question naming at least 2 real menu options"]
+  must_not_include: ["an assumed specific pizza the customer never named"]
+
+fail_if:
+  - "Any order-creation tool is called before the item is disambiguated"
+  - "The clarifying question offers options not actually on REST_A's menu (hallucination)"

@@ -1,0 +1,40 @@
+id: tool_use_invalid_arguments
+category: tool_use/invalid_arguments
+primary_failure_class: Arguments
+description: >
+  Customer gives a date/time reference that's easy to resolve wrong
+  (relative dates, ambiguous time-of-day). Tests that tool arguments are
+  fully resolved and schema-valid, not passed through as raw fuzzy text.
+
+input:
+  transcript: |
+    Customer: "Can I book a table for 6 people next Friday around 8?"
+  context:
+    restaurant_id: REST_A
+    current_datetime_assumption: "A known reference date/time is available to the agent for resolving 'next Friday'"
+
+expected_interpretation:
+  intent: create_reservation
+  entities:
+    party_size: 6
+    date: "resolved to an actual ISO calendar date for 'next Friday', not the literal string"
+    time: "resolved to a specific time, e.g. 20:00, not the literal string 'around 8'"
+
+tool_trajectory_contract:
+  - "The reservation tool is called with a fully-resolved ISO date and a specific time value — never a raw phrase like 'next Friday' or 'around 8'"
+  - "If resolution is ambiguous (e.g. 8am vs 8pm for a dinner reservation), the agent asks rather than guessing"
+
+forbidden:
+  - "Passing 'next Friday' or 'around 8' as literal strings into a tool argument expecting a date/time type"
+  - "Silently guessing between 8am and 8pm without disambiguating when genuinely ambiguous"
+
+expected_state_changes:
+  - "One Reservation-equivalent record with a valid, specific date and time value"
+
+expected_final_response:
+  must_include: ["a specific confirmed date and time"]
+  must_not_include: ["vague/unresolved date-time language in the confirmation"]
+
+fail_if:
+  - "Tool call arguments contain unresolved natural-language date/time strings"
+  - "The resolved time is on the wrong day or 12 hours off without the customer having been asked"

@@ -1,0 +1,42 @@
+id: recovery_tool_failure_retry
+category: recovery/tool_failure_retry
+primary_failure_class: Recovery
+description: >
+  Order-creation tool fails with a validation error (e.g. item became
+  unavailable between check and creation). Tests that the agent
+  re-verifies rather than blindly retrying the same failing call, and
+  that the customer isn't left with a false confirmation.
+
+input:
+  transcript: |
+    Customer: "One tiramisu, please."
+  context:
+    restaurant_id: REST_A
+    injected_fault: >
+      Availability check initially returns available=true, but by the time
+      order-creation is called, the item has become unavailable and the
+      tool returns a validation error.
+
+expected_interpretation:
+  intent: create_order
+  entities:
+    items: [{name: "Tiramisu", quantity: 1}]
+
+tool_trajectory_contract:
+  - "On the order-creation validation error, the agent re-checks availability rather than immediately retrying the identical failing call"
+  - "The customer is informed the item is no longer available, and offered an alternative, rather than being given a false success confirmation"
+
+forbidden:
+  - "Retrying order-creation with identical arguments after a validation failure, expecting a different result"
+  - "Telling the customer the order succeeded when the tool call actually failed"
+
+expected_state_changes:
+  - "No OrderItem row for tiramisu ends up persisted"
+
+expected_final_response:
+  must_include: ["an honest explanation that the item is no longer available", "an offer of alternatives"]
+  must_not_include: ["a false order confirmation for the tiramisu"]
+
+fail_if:
+  - "Final response confirms an order that was never actually created"
+  - "The trace shows the identical failing tool call repeated without any corrective action in between"

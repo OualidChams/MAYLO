@@ -67,7 +67,18 @@ reliable "already decided" reference.)
   `restaurant_id` — never a bare/global transcript stream. Already
   structurally guaranteed by `CallHandler.on_audio(call_id, ...)`; stating
   it explicitly so it stays true as Deepgram's interim/final distinction
-  and timestamps get added.
+  and timestamps get added. 🆕 **Trace identity, introduced incrementally
+  Phase 2→6, not built now:** `Call` already exists; as Phase 2/3/6 land,
+  each needs to produce a `Turn` (STT+LLM+tool calls+TTS for one
+  back-and-forth) and each tool call needs a `ToolExecution` record —
+  this is the forensic trail for "why did the AI say/charge that." Not
+  schemed in detail now because the exact shape depends on what Phase 2's
+  STT output and Phase 6's tool-call format actually look like — guessing
+  the columns before either exists risks the same wrong-schema problem
+  Organization avoided by being genuinely stable already. Also extend the
+  event vocabulary from `stt.first_transcript` etc. to include
+  `agent.tool.requested/authorized/rejected/executed/failed` and
+  `order.created/cancelled` once there's an agent and tools to emit them.
 - **Phase 3 — Brain**: Qwen. 🆕 **Acceptance criterion:** streaming tokens →
   TTS directly from the first implementation, not a later retrofit. Goal: no
   waiting for the full response before audio starts. 🆕 **Added — loop stop
@@ -96,7 +107,25 @@ reliable "already decided" reference.)
   (`OrderService.create_order()` etc., already noted in section 4) — built
   *with* the tool that first needs it, not scaffolded speculatively ahead
   of time for services nothing calls yet (`ReservationService`,
-  `MenuService`... only when Phase 6 actually needs them).
+  `MenuService`... only when Phase 6 actually needs them). 🆕
+  **Pre-requisite, not a Phase 12 concern:** every tool receives a
+  minimal `SecurityContext` (`actor_type="ai_agent"`, `actor_id`,
+  `restaurant_id`, `capabilities: set[str]`) built by the call session,
+  not by the tool guessing. This is a stable value object — its shape is
+  already fully determined by decisions already made (Organization/
+  Restaurant hierarchy, the least-privilege-agent principle) — unlike
+  `OrderService`, it doesn't need Phase 6's tools to exist first to know
+  its fields. Still not implemented as code yet, since nothing calls it
+  until Phase 6 tools exist to receive it, but tools must be built
+  against this shape from their first line, not retrofitted onto it —
+  that's the actual lesson from the review that raised this. When human
+  actors arrive in Phase 12, they populate the same `SecurityContext`
+  shape via membership/role — the interface doesn't change, only what
+  constructs it. 🆕 **Menu truth stays server-side:** tool arguments
+  reference `menu_item_id`/`modifier_id`, never a full item structure
+  (`{"name": ..., "price": ...}`) invented by the model — the backend
+  resolves IDs into truth, same principle as price/availability already
+  in this file.
 - **Phase 7 — Order Safety**: draft → validate → confirm → submit. The LLM
   never owns the truth for prices/availability. 🆕 **Added — risk-based
   human-in-the-loop:** not everything auto-executes just because validation
@@ -117,12 +146,33 @@ reliable "already decided" reference.)
   criterion that matters most:** would this restaurant pay €X/month for
   this, unprompted — not "did the demo work." PMF and unit economics
   (section 1) get measured here first, before any further technical
-  investment beyond this phase.
+  investment beyond this phase. 🆕 **Cost metric sharpened:** report
+  cost/successful-call, not cost/call or cost/minute — a cheap call that
+  fails and needs a human anyway is worse than a slightly pricier one
+  that works, so the two numbers (telemetry + failure classification,
+  both already tracked above) get combined into the one that actually
+  matters.
 - **Phase 10 — Evaluation System**: eval-case dataset, compare
   models/prompts. 🆕 **Refined:** test full trajectories (which tools were
   called, in what order, with what arguments), not just whether the final
   answer looks right — an agent can reach a correct-looking answer through
-  a wrong/unsafe path, and that has to fail the eval too.
+  a wrong/unsafe path, and that has to fail the eval too. 🆕 **Seed dataset
+  written now, as a paper exercise (`eval_cases/`, 19 hand-written golden
+  cases across ordering/authorization/tool_use/adversarial/recovery)** —
+  see `eval_cases/README.md` for the schema and the "evaluate contracts,
+  not implementation details" principle. This exists before the agent
+  does; Phase 10 wires an automated runner up to it once tools (Phase 6)
+  and the agent loop (Phase 3) exist. Extend toward 25-30 using real
+  Phase 9 failures once they exist, not more paper exercise. 🆕
+  **Runner harness built now too (`evals/`), tested against hand-built
+  trajectories:** loads `eval_cases/`, captures a `Trajectory`
+  (interpretation, tool calls, final response), and grades it in two
+  honest tiers — `grade_structural()` is real and automated today
+  (catches restaurant_id scope leaks and forbidden-phrase responses
+  deterministically, no model needed); `judge_with_llm()` is a documented,
+  deliberately unimplemented extension point for the natural-language
+  contracts, left that way until Phase 3/6 produce real trajectories
+  worth spending judge-model calls on. Run it: `python -m evals.run`.
 - **Phase 11 — RAG**: only after the MVP is proven. Stage-aware retrieval
   (not dumping everything).
 - **Phase 12 — Dashboard**: calls/orders/failed calls. Note: Supabase Auth
@@ -137,7 +187,13 @@ reliable "already decided" reference.)
   Forwarding" is the default (confirmed by the telephony discussions),
   "Connect SIP/PBX" = a deferred advanced integration.
 - **Phase 14 — Reliability**: timeouts/retries/circuit breakers/LLM router
-  (fallback provider).
+  (fallback provider). 🆕 **Noted for whenever a CI/CD pipeline exists
+  (downstream of the git-repo setup, itself already deferred):** Phase 10
+  evals should gate deployment, not just report scores — a new version can
+  pass every unit test while the agent gets measurably worse (lower order
+  accuracy, more unsafe trajectories), and only a staging eval run catches
+  that. Nothing to build now; there's no repo or pipeline yet for this to
+  attach to.
 - **Phase 15 — Self-hosting**: 🆕 **Trigger now defined:** after real Phase 9
   data + a restaurant count that justifies GPU capex, redo the Architecture
   A/B/C/D comparison **with actually measured numbers**, not published
@@ -240,4 +296,5 @@ apply them to):**
 | RAG / pgvector | Phase 11 | After the MVP is proven |
 | Kubernetes / Kafka / microservices | Not planned | No need at this scale |
 | Full RBAC/authz engine, audit log, RLS, break-glass access | Phase 12 | Real human dashboard users/login exist |
+| Outbound calling | Not in scope in any current phase | If ever added: agent requests `call_customer()`, backend authorizes (actor/restaurant/customer/caller-ID/audit checks) before it reaches `CallHandler` — never direct SIP/provider access from the agent |
 | Workflow orchestration (Temporal leaning; Conductor/Orkes, n8n considered) | Phase 12/13 | Real async multi-step process exists: onboarding, billing/usage aggregation, or POS sync. Never for the live call path — that stays a single async Python request. |

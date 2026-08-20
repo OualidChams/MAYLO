@@ -7,6 +7,7 @@ we're building a multi-restaurant SaaS, not a single-restaurant app
 """
 import uuid
 from datetime import datetime, time
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -51,6 +52,18 @@ class Organization(Base):
 
 
 class Restaurant(Base):
+    """
+    A phone-answering unit — one Restaurant = one phone number = one AI
+    agent configuration = one CallHandler scope. This is the operative
+    tenant boundary for calls/orders/menu, NOT necessarily one physical
+    building: a multi-branch brand can be one Restaurant with several
+    Locations sharing one number/menu/agent, or several Restaurants (one
+    per branch) if each branch needs its own number/menu/agent — that
+    choice is made per-organization at onboarding, not fixed by the schema.
+    Clarified now per architecture review; revisit before Phase 6 if real
+    onboarding shows the wrong default.
+    """
+
     __tablename__ = "restaurants"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
@@ -72,6 +85,11 @@ class Restaurant(Base):
 
 
 class Location(Base):
+    """A physical address belonging to a Restaurant — purely informational
+    (e.g. for a menu footer or directions), not a separate call-routing or
+    tenant-scoping unit. See Restaurant's docstring for the brand-vs-branch
+    distinction this depends on."""
+
     __tablename__ = "locations"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
@@ -89,7 +107,7 @@ class MenuItem(Base):
     category: Mapped[str] = mapped_column(String(100), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
-    price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     available: Mapped[bool] = mapped_column(Boolean, default=True)
 
     restaurant: Mapped["Restaurant"] = relationship(back_populates="menu_items")
@@ -134,7 +152,7 @@ class Order(Base):
     call_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("calls.id"), nullable=True, index=True)
     # pending | confirmed | cancelled
     status: Mapped[str] = mapped_column(String(32), default="pending")
-    total: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
+    total: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     restaurant: Mapped["Restaurant"] = relationship(back_populates="orders")
@@ -151,6 +169,6 @@ class OrderItem(Base):
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     # Price at order time — we don't rely on the current menu_items price later
     # (decision #21: never trust the LLM with business truth — same logic applies to prices that can change)
-    price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
 
     order: Mapped["Order"] = relationship(back_populates="items")

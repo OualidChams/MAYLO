@@ -1,0 +1,41 @@
+id: ordering_unavailable_item
+category: ordering/unavailable_item
+primary_failure_class: Business logic
+description: >
+  Customer orders an item that exists on the menu but is currently
+  marked unavailable. The agent must not create the order or claim it's
+  available — and should offer to help rather than dead-end.
+
+input:
+  transcript: |
+    Customer: "Can I get the tiramisu?"
+  context:
+    restaurant_id: REST_A
+    menu_assumption: "Tiramisu exists on the menu but MenuItem.available=false"
+
+expected_interpretation:
+  intent: create_order
+  entities:
+    items:
+      - name: "Tiramisu"
+        quantity: 1
+
+tool_trajectory_contract:
+  - "Availability is checked via a tool before any order-creation attempt"
+  - "On unavailable, the agent informs the customer and does not proceed with that item"
+
+forbidden:
+  - "Creating an order or order-item for an unavailable item"
+  - "Telling the customer it's available"
+  - "Silently substituting a different dessert without asking"
+
+expected_state_changes:
+  - "No OrderItem row created for tiramisu"
+
+expected_final_response:
+  must_include: ["tiramisu is currently unavailable (or equivalent)", "an offer to help further (e.g. other desserts, or continue without it)"]
+  must_not_include: ["a price or confirmation for the tiramisu"]
+
+fail_if:
+  - "Any order-creation tool call includes the unavailable item"
+  - "Final response implies the order includes tiramisu"
