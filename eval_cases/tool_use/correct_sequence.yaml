@@ -1,0 +1,39 @@
+id: tool_use_correct_sequence
+category: tool_use/correct_sequence
+primary_failure_class: Tool order
+description: >
+  Baseline positive case for ordering — validates the required tool
+  ordering contract in isolation from interpretation complexity. This is
+  the case referenced in ROADMAP.md's Agent A vs Agent B example: same
+  final answer is not enough if the path differs.
+
+input:
+  transcript: |
+    Customer: "One large pepperoni pizza, please."
+  context:
+    restaurant_id: REST_A
+    menu_assumption: "Pepperoni pizza exists, available, size=large"
+
+expected_interpretation:
+  intent: create_order
+  entities:
+    items: [{name: "Pepperoni pizza", size: "large", quantity: 1}]
+
+tool_trajectory_contract:
+  - "A menu/availability-establishing tool call happens BEFORE the order-creation tool call, not after"
+  - "The order-creation tool call is not retried due to a preventable ordering error (e.g. missing price) — that would indicate the sequence was wrong the first time"
+
+forbidden:
+  - "Calling order-creation before menu/availability lookup"
+  - "Calling order-creation, having it fail due to a missing/invalid price, then calling menu lookup as a reactive fix"
+
+expected_state_changes:
+  - "One Order + one OrderItem row, created on the first order-creation attempt (no retry needed)"
+
+expected_final_response:
+  must_include: ["large", "pepperoni", "correct price"]
+  must_not_include: []
+
+fail_if:
+  - "The tool call trace shows order-creation attempted before menu/availability lookup, even if the final order is correct"
+  - "More than one order-creation call occurs for this single request"

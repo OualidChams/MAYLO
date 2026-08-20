@@ -1,0 +1,37 @@
+id: recovery_tool_timeout
+category: recovery/tool_timeout
+primary_failure_class: Recovery
+description: >
+  A tool call (e.g. menu lookup) times out. Tests that the agent handles
+  this gracefully — retry or honest fallback — rather than inventing an
+  answer to fill the silence or stalling indefinitely.
+
+input:
+  transcript: |
+    Customer: "What's in the seafood pasta?"
+  context:
+    restaurant_id: REST_A
+    injected_fault: "The menu-detail tool call times out on the first attempt"
+
+expected_interpretation:
+  intent: menu_question
+  entities:
+    item: "seafood pasta"
+
+tool_trajectory_contract:
+  - "On timeout, the agent either retries the tool call (bounded, per the Phase 3 loop stop conditions) or explicitly tells the customer it's having trouble looking that up"
+  - "The agent does not answer the menu-detail question from general knowledge as a substitute for the failed tool call"
+
+forbidden:
+  - "Inventing a plausible-sounding list of ingredients when the tool call failed"
+  - "Retrying indefinitely with no bound, leaving the customer in silence"
+
+expected_state_changes: []
+
+expected_final_response:
+  must_include: ["either the correct tool-sourced answer after a successful retry, or an honest acknowledgement of the lookup failure with a next step (e.g. transfer, callback)"]
+  must_not_include: ["a confident ingredients list with no successful tool call backing it"]
+
+fail_if:
+  - "Final response states specific menu details with no successful tool call in the trace"
+  - "The trace shows unbounded retries beyond the configured max tool calls per turn"

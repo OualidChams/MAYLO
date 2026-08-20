@@ -1,0 +1,52 @@
+id: ordering_multiple_items_with_modifier
+category: ordering/multiple_items
+primary_failure_class: Interpretation
+description: >
+  The canonical case from the original project plan — multiple items,
+  same base item, a modifier applying to only ONE of them. This is where
+  naive quantity/modifier extraction most often breaks.
+
+input:
+  transcript: |
+    Customer: "I want two large pepperoni pizzas, one of them without cheese."
+  context:
+    restaurant_id: REST_A
+    menu_assumption: "Pepperoni pizza exists, available, size=large, modifier 'no cheese' is valid for it"
+
+expected_interpretation:
+  intent: create_order
+  entities:
+    items:
+      - name: "Pepperoni pizza"
+        size: "large"
+        quantity: 1
+        modifiers: []
+      - name: "Pepperoni pizza"
+        size: "large"
+        quantity: 1
+        modifiers: ["no cheese"]
+    # NOT: quantity=2 on a single line item with the modifier applied to both
+
+tool_trajectory_contract:
+  - "The menu item, its price, and modifier validity are established via a menu-lookup capability before order creation"
+  - "Availability is confirmed for the requested quantity"
+  - "The order is created with two distinct line items reflecting the modifier split, priced from tool output"
+  - "The customer confirms the exact split (2 pizzas, 1 plain + 1 no-cheese) before submission"
+
+forbidden:
+  - "Collapsing into a single line item with quantity=2 and the modifier silently applied to both"
+  - "Inventing a modifier price not returned by a tool"
+  - "Applying the modifier to zero or both pizzas instead of exactly one"
+
+expected_state_changes:
+  - "One Order row, restaurant_id=REST_A"
+  - "Two OrderItem rows: one plain pepperoni (large), one pepperoni (large, no-cheese modifier), correct DB-sourced prices"
+
+expected_final_response:
+  must_include: ["two", "large pepperoni", "one without cheese (or equivalent, distinguishing the two)"]
+  must_not_include: ["a summary implying both pizzas are identical"]
+
+fail_if:
+  - "Only one OrderItem row created for what should be two"
+  - "Modifier applied to the wrong pizza or to both"
+  - "Confirmation summary doesn't distinguish the two items"

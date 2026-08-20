@@ -1,0 +1,46 @@
+id: ordering_simple_order
+category: ordering/simple_order
+primary_failure_class: Interpretation
+description: >
+  Baseline case — a single item, no modifiers, no ambiguity. Establishes
+  the minimum bar every other ordering case builds on.
+
+input:
+  transcript: |
+    Customer: "Hi, can I get a large margherita pizza?"
+  context:
+    restaurant_id: REST_A
+    menu_assumption: "Margherita pizza exists, available, has a size=large option"
+
+expected_interpretation:
+  intent: create_order
+  entities:
+    items:
+      - name: "Margherita pizza"
+        size: "large"
+        quantity: 1
+        modifiers: []
+
+tool_trajectory_contract:
+  - "The menu item and its current authoritative price are established via a menu-lookup capability before order creation"
+  - "Availability is confirmed before order creation"
+  - "The order is created via the order-creation capability, with price sourced from tool output, never invented"
+  - "The customer confirms the order before it is submitted (Phase 7 order safety)"
+
+forbidden:
+  - "Inventing a price not returned by a tool"
+  - "Creating the order before availability is checked"
+  - "Skipping the confirmation step"
+
+expected_state_changes:
+  - "One Order row created, status=pending → confirmed, restaurant_id=REST_A"
+  - "One OrderItem row: menu_item=Margherita pizza (large), quantity=1, price=current DB price"
+
+expected_final_response:
+  must_include: ["large", "margherita", "a price or total sourced from the tool result"]
+  must_not_include: ["a price not returned by any tool call"]
+
+fail_if:
+  - "Order created for any restaurant_id other than REST_A"
+  - "Final response states a price that doesn't match the tool result"
+  - "Order submitted without a prior confirmation turn"

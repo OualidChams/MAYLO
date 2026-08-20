@@ -1,0 +1,43 @@
+id: ordering_quantity_correction_mid_conversation
+category: ordering/quantity_correction
+primary_failure_class: State mutation
+description: >
+  Customer revises an already-stated quantity before the order is
+  confirmed. Tests that the draft order is mutated correctly rather than
+  appended to (ending up with both quantities).
+
+input:
+  transcript: |
+    Customer: "I'll take three cokes."
+    AI: "Three Cokes — anything else?"
+    Customer: "Actually, make that two."
+  context:
+    restaurant_id: REST_A
+    menu_assumption: "Coke exists, available"
+
+expected_interpretation:
+  intent: update_draft_order
+  entities:
+    items:
+      - name: "Coke"
+        quantity: 2  # corrected value, not 3 and not 5
+
+tool_trajectory_contract:
+  - "The existing draft order line item for Coke is updated to quantity=2, not appended as a second line"
+  - "The updated total reflects quantity=2, sourced from tool output"
+
+forbidden:
+  - "Ending up with quantity=3 (ignoring the correction)"
+  - "Ending up with quantity=5 (treating 'two' as additive)"
+  - "Creating a second, separate Coke line item"
+
+expected_state_changes:
+  - "Exactly one draft OrderItem row for Coke, quantity=2"
+
+expected_final_response:
+  must_include: ["two", "coke"]
+  must_not_include: ["three", "five"]
+
+fail_if:
+  - "Final draft order total implies any quantity other than 2 Cokes"
+  - "More than one OrderItem row exists for Coke"

@@ -1,0 +1,18 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+sqlalchemy==2.0.36
+asyncpg==0.30.0
+pydantic-settings==2.7.0
+python-multipart==0.0.20
+twilio==9.4.1
+pyyaml==6.0.2   # evals/ harness — reads eval_cases/*.yaml
+
+# To be added starting Days 3-8:
+# websockets          (Media Streams)
+# deepgram-sdk        (STT)
+# dashscope           (Qwen via Alibaba Model Studio)
+# fish-audio-sdk      (TTS)
+
+# Days 11-12 (production safety):
+# alembic
+# sentry-sdk[fastapi]

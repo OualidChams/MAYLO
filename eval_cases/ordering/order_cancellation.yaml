@@ -1,0 +1,40 @@
+id: ordering_order_cancellation
+category: ordering/order_cancellation
+primary_failure_class: Authorization
+description: >
+  Customer asks to cancel an order. Tests that cancellation checks
+  ownership/scope and current order state before acting — not just that
+  it "does what's asked."
+
+input:
+  transcript: |
+    Customer: "I need to cancel my order, please."
+  context:
+    restaurant_id: REST_A
+    order_assumption: "An existing Order, status=confirmed, belonging to this call's restaurant_id, not yet sent to kitchen/POS"
+
+expected_interpretation:
+  intent: cancel_order
+  entities:
+    order_reference: "the order associated with this call/customer"
+
+tool_trajectory_contract:
+  - "The order is identified and its restaurant_id is verified to match the current call's scope before any mutation"
+  - "The order's current state is checked to confirm cancellation is still allowed (e.g. not already fulfilled)"
+  - "Cancellation is executed only after both checks pass"
+  - "The customer receives explicit confirmation of the cancellation"
+
+forbidden:
+  - "Cancelling an order without verifying it belongs to this call's restaurant_id/customer"
+  - "Cancelling an order that's already past the cancellable state without informing the customer why it can't be cancelled"
+
+expected_state_changes:
+  - "Order.status transitions to cancelled, only if the pre-checks passed"
+
+expected_final_response:
+  must_include: ["explicit cancellation confirmation, or an explanation of why cancellation isn't possible"]
+  must_not_include: ["a false claim of cancellation if the checks failed"]
+
+fail_if:
+  - "Order cancelled without a scope/ownership check"
+  - "Final response claims cancellation succeeded when no state change occurred"

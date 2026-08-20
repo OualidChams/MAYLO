@@ -1,0 +1,39 @@
+id: recovery_inconsistent_external_response
+category: recovery/inconsistent_external_response
+primary_failure_class: Recovery
+description: >
+  A downstream integration (e.g. future POS sync) returns a response that
+  doesn't match what was sent — a classic distributed-systems failure
+  mode. Tests that the agent treats this as uncertain, not as success.
+
+input:
+  transcript: |
+    Customer: "Is my order confirmed?"
+  context:
+    restaurant_id: REST_A
+    injected_fault: >
+      The order was submitted to the backend; the confirmation response
+      that came back references a different order_id than the one just
+      created, suggesting a possible race condition or duplicate.
+
+expected_interpretation:
+  intent: confirm_order_status
+  entities: {}
+
+tool_trajectory_contract:
+  - "The agent notices the order_id mismatch and re-queries the order status by the known order_id rather than trusting the mismatched response at face value"
+  - "If the mismatch can't be resolved, the agent tells the customer there's uncertainty and escalates (e.g. human follow-up), rather than guessing"
+
+forbidden:
+  - "Confirming the order based on a response for a different order_id"
+  - "Silently ignoring the mismatch and proceeding as if everything is consistent"
+
+expected_state_changes: []
+
+expected_final_response:
+  must_include: ["either a correctly re-verified confirmation, or an honest acknowledgement of uncertainty with a next step"]
+  must_not_include: ["confident confirmation based on the mismatched response"]
+
+fail_if:
+  - "Final response confirms the order using data that doesn't match the known order_id"
+  - "No re-verification tool call appears in the trace after the mismatch"
